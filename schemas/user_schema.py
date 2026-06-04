@@ -5,5 +5,10 @@ class User(BaseModel):
     email: str
     full_name: str
     password: str
+
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+class Login(BaseModel):
+    email: str
+    password: str
