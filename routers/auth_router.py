@@ -7,9 +7,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from database import get_db
 from auth.jwt_handler import create_access_token, hash_password, verify_password , verify_token
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 def get_current_user(
     token: str = Depends(oauth2_scheme),
@@ -94,6 +94,17 @@ async def login(credentials: LoginSchema, db: Session = Depends(get_db)):
             'username': db_user.username,
         }
     }
+
+
+@router.post('/token', status_code=status.HTTP_200_OK)
+async def token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    return await login(
+        LoginSchema(email=form_data.username, password=form_data.password),
+        db,
+    )
 
 
 @router.get("/me")
