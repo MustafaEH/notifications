@@ -10,7 +10,6 @@ class NotificationResponse(BaseModel):
 
     status: str
     retry_count: int
-
     model_config = ConfigDict(from_attributes=True)
 
 
