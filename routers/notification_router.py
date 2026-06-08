@@ -1,3 +1,4 @@
+import json
 from time import sleep
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -5,7 +6,9 @@ from database import get_db
 from models.notification import Notification
 from routers.auth_router import get_current_user
 from schemas.notification_schema import NotificationResponse, NotificationCreate
+from services.redis_client import get_cache, set_cache
 from tasks import process_notification
+from services import redis_client
 
 router = APIRouter(
     prefix="/notifications",
@@ -32,11 +35,28 @@ async def create_notification(notification_data: NotificationCreate, db: Session
     return new_notification
 
 
+import time
+
+
 @router.get('/', response_model=list[NotificationResponse], status_code=status.HTTP_200_OK)
 async def get_notifications(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    start = time.time()
+
+    cache_key = f"notifications:user:{current_user.id}"
+    cached = get_cache(cache_key)
+
+    if cached:
+        print(f"CACHE HIT — {(time.time() - start) * 1000:.2f}ms")
+        return json.loads(cached)
+
     notifications = db.query(Notification).filter(
         Notification.sender_id == current_user.id
     ).order_by(Notification.created_at.desc()).all()
+
+    serialized = json.dumps([NotificationResponse.from_orm(n).model_dump(mode='json') for n in notifications])
+    set_cache(cache_key, serialized, ttl=30)
+
+    print(f"CACHE MISS — {(time.time() - start) * 1000:.2f}ms")
     return notifications
 
 
