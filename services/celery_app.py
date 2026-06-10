@@ -16,7 +16,3 @@ celery_app.conf.update(
     task_serializer='json',
     result_serializer='json',
 )
-
-from models.user import User
-from models.notification import Notification
-

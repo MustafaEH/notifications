@@ -6,7 +6,6 @@ from sqlalchemy.orm import sessionmaker
 from database import Base, get_db
 from main import app
 
-# separate test database — SQLite, in memory, no setup needed
 TEST_DATABASE_URL = "sqlite:///./test.db"
 
 engine = create_engine(
@@ -54,8 +53,8 @@ def auth_client(client):
     })
 
     # login
-    response = client.post("/auth/token", data={
-        "username": "test@test.com",
+    response = client.post("/auth/login", json={
+        "email": "test@test.com",
         "password": "testpass123"
     })
 

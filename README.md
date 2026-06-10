@@ -1,28 +1,60 @@
-# Notifications Service
+# Notifications API
 
-A FastAPI-based notification API with JWT authentication, Redis caching, rate limiting, and asynchronous processing via Celery.
+A backend service for creating and managing notifications asynchronously. Built as a hands-on project to practice core backend concepts — REST API design, authentication, background jobs, caching, and containerized deployment.
 
-## Stack
+## Highlights
 
-- **API** — FastAPI + Uvicorn
-- **Database** — PostgreSQL (SQLAlchemy)
-- **Cache & broker** — Redis
-- **Workers** — Celery
+- **JWT authentication** with password hashing and protected routes
+- **Async processing** — notifications are queued and processed by Celery workers
+- **Redis** for caching list responses and per-user rate limiting (60 req/min)
+- **Retry logic** with exponential backoff; failed deliveries move to a dead state after max retries
+- **Docker Compose** stack: API, Celery worker, PostgreSQL, and Redis
+- **Automated tests** with pytest and load testing with Locust
 
-## Quick start (Docker)
+## Tech Stack
 
-**Prerequisites:** Docker and Docker Compose
+| Layer | Technology |
+|-------|------------|
+| API | FastAPI, Uvicorn |
+| Database | PostgreSQL, SQLAlchemy |
+| Cache / Message broker | Redis |
+| Background tasks | Celery |
+| Auth | JWT (Bearer tokens), Passlib |
+| Testing | pytest, Locust |
+| Deployment | Docker, Docker Compose |
+
+## Architecture
+
+```
+Client
+  │
+  ▼
+FastAPI (API) ──────► PostgreSQL
+  │                        ▲
+  ├── Redis (cache, rate limit)
+  │
+  └── enqueue task ──► Redis (broker)
+                              │
+                              ▼
+                        Celery Worker ──► PostgreSQL
+```
+
+**Notification lifecycle:** `pending` → `processing` → `successful` or `dead` (after retries)
+
+## Quick Start
+
+**Prerequisites:** [Docker](https://docs.docker.com/get-docker/) and Docker Compose
 
 ```bash
+git clone https://github.com/MustafaEH/notifications.git
+cd notifications
 docker compose up -d
 ```
 
-| Service | URL / port |
-|---------|------------|
+| Service | URL |
+|---------|-----|
 | API | http://localhost:8000 |
-| API docs | http://localhost:8000/docs |
-| PostgreSQL | `localhost:5432` |
-| Redis | `localhost:6379` |
+| Interactive docs | http://localhost:8000/docs |
 
 Stop the stack:
 
@@ -30,22 +62,19 @@ Stop the stack:
 docker compose down
 ```
 
-## API overview
+## API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/auth/register` | Create a user account |
-| `POST` | `/auth/login` | Login with email and password |
-| `POST` | `/auth/token` | OAuth2 token endpoint (for Swagger) |
-| `GET` | `/auth/me` | Current user profile (auth required) |
-| `POST` | `/notifications/` | Create a notification (auth required) |
-| `GET` | `/notifications/` | List your notifications (auth required) |
-| `GET` | `/notifications/{id}` | Get a notification by ID (auth required) |
-| `DELETE` | `/notifications/{id}` | Delete a notification (auth required) |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/auth/register` | — | Register a new user |
+| `POST` | `/auth/login` | — | Login and receive a JWT |
+| `GET` | `/auth/me` | ✓ | Get current user profile |
+| `POST` | `/notifications/` | ✓ | Create a notification (queued for processing) |
+| `GET` | `/notifications/` | ✓ | List your notifications |
+| `GET` | `/notifications/{id}` | ✓ | Get a single notification |
+| `DELETE` | `/notifications/{id}` | ✓ | Delete a notification |
 
-Creating a notification enqueues a Celery task that processes it asynchronously (`pending` → `processing` → `successful` or `dead`).
-
-## Example flow
+## Example Usage
 
 ```bash
 # Register
@@ -53,31 +82,19 @@ curl -X POST http://localhost:8000/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"user@example.com","username":"user1","full_name":"User One","password":"secret123"}'
 
-# Get a token
-curl -X POST http://localhost:8000/auth/token \
-  -d "username=user@example.com&password=secret123"
+# Login
+curl -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"secret123"}'
 
 # Create a notification
 curl -X POST http://localhost:8000/notifications/ \
-  -H "Authorization: Bearer <token>" \
+  -H "Authorization: Bearer <your_token>" \
   -H "Content-Type: application/json" \
   -d '{"recipient":"alice@example.com","channel":"email","subject":"Hello","content":"Test message"}'
 ```
 
-## Environment variables
-
-Docker Compose sets these automatically. For local development, copy and adjust as needed:
-
-| Variable | Description | Default (Docker) |
-|----------|-------------|------------------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://postgres:postgres@db:5432/notifications` |
-| `REDIS_HOST` | Redis hostname | `redis` |
-| `REDIS_URL` | Redis URL for Celery | `redis://redis:6379/0` |
-| `JWT_SECRET` | Signing key for JWT tokens | — |
-| `JWT_ALGORITHM` | JWT algorithm | `HS256` |
-| `ACCESS_TOKEN_EXPIRE_MINUTE` | Token lifetime in minutes | `30` |
-
-## Local development (without Docker)
+## Local Development
 
 ```bash
 python -m venv .venv
@@ -87,31 +104,50 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Ensure PostgreSQL and Redis are running locally, then set a `.env` file with your connection details and start the services:
+Create a `.env` file with your local database and Redis settings, then run:
 
 ```bash
 uvicorn main:app --reload
 celery -A services.celery_app.celery_app worker --loglevel=info
 ```
 
-## Tests
+## Testing
 
 ```bash
 pytest
 ```
 
-## Project structure
+Load testing (requires the API to be running):
+
+```bash
+locust -f locustfile.py --host http://localhost:8000
+```
+
+## Project Structure
 
 ```
-├── main.py                 # FastAPI app entry point
-├── database.py             # SQLAlchemy engine and session
-├── tasks.py                # Celery notification processing task
-├── auth/                   # JWT and password utilities
-├── models/                 # SQLAlchemy models
-├── routers/                # API route handlers
-├── schemas/                # Pydantic request/response models
-├── services/               # Redis, Celery, rate limiting
-├── tests/                  # Pytest suite
+├── main.py              # Application entry point
+├── database.py          # Database engine and session
+├── tasks.py             # Celery background tasks
+├── auth/                # JWT and password utilities
+├── models/              # SQLAlchemy ORM models
+├── routers/             # API route handlers
+├── schemas/             # Pydantic request/response models
+├── services/            # Redis, Celery, rate limiting
+├── tests/               # pytest test suite
 ├── Dockerfile
 └── docker-compose.yml
 ```
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `REDIS_HOST` | Redis hostname (used by cache client) |
+| `REDIS_URL` | Redis URL for Celery broker/backend |
+| `JWT_SECRET` | Secret key for signing JWTs |
+| `JWT_ALGORITHM` | JWT signing algorithm (default: `HS256`) |
+| `ACCESS_TOKEN_EXPIRE_MINUTE` | Token expiry in minutes |
+
+Docker Compose sets all of these automatically for the containerized stack.

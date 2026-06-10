@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status, exceptions
+from fastapi import Depends, HTTPException, status
 from services.redis_client import redis_client
 
 from routers.auth_router import get_current_user

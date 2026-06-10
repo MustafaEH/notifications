@@ -27,9 +27,9 @@ class NotificationApiUser(HttpUser):
         )
 
         response = self.client.post(
-            "/auth/token",
-            data={"username": self.email, "password": self.password},
-            name="/auth/token",
+            "/auth/login",
+            json={"email": self.email, "password": self.password},
+            name="/auth/login",
         )
 
         if response.ok:

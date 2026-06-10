@@ -1,9 +1,9 @@
 from datetime import datetime
 
 from models.notification import Notification
+from models.user import User
 from services.celery_app import celery_app
 from database import SessionLocal
-from models.user import User
 from services.redis_client import delete_cache
 
 
