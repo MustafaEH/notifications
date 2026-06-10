@@ -1,6 +1,11 @@
-from redis import Redis
+import os
 
-redis_client = Redis(host="localhost", port=6379, decode_responses=True)
+from redis import Redis
+from dotenv import load_dotenv
+load_dotenv()
+
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+redis_client = Redis(host=REDIS_HOST, port=6379, decode_responses=True)
 
 def get_cache(key: str):
     get = redis_client.get(key)

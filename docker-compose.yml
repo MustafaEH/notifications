@@ -1,0 +1,61 @@
+services:
+  api:
+    build: .
+    container_name: notifications_api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/notifications
+      REDIS_HOST: redis
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: notifications_secret_key
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTE: 30
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker:
+    build: .
+    container_name: notifications_worker
+    command: celery -A services.celery_app.celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/notifications
+      REDIS_HOST: redis
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: notifications_secret_key
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTE: 30
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  db:
+    image: postgres:16-alpine
+    container_name: notifications_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: notifications
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notifications"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: notifications_redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
